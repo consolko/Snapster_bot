@@ -1,6 +1,6 @@
 services:
   bot:
-    container_name: 'BotName'
+    container_name: 'Snapster_bot'
     networks:
       - tg_bots_network
     build:
@@ -14,7 +14,7 @@ services:
     environment:
       - TZ=Europe/Moscow
     volumes:
-      - ../sessions:/app/sessions
+      - ../sessions/Snapster:/app/sessions
 
     restart: unless-stopped
     command: "python3 main.py -a 1"

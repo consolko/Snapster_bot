@@ -9,6 +9,9 @@ class Settings(BaseSettings):
 
     REF_ID: str = ''
 
+    AUTO_CLAIM: bool = True
+    CLAIM_RANGE: list[int] = [10800, 14400]
+
     USE_RANDOM_DELAY_IN_RUN: bool = True
     RANDOM_DELAY_IN_RUN: list[int] = [0, 15]
 

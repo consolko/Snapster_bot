@@ -33,11 +33,13 @@ class Tapper:
     def __init__(self, tg_client: Client):
         self.session_name = tg_client.name
         self.tg_client = tg_client
-        self.bot_name = ''
-        self.app_url = ''
+        self.bot_name = 'snapster_bot'
+        self.app_url = 'https://snapster.psylabs.tech/'
 
         self.user = None
         self.token = None
+
+        self.next_claim_dt = None
 
     def info(self, message):
         from bot.utils import info
@@ -122,7 +124,7 @@ class Tapper:
                 write_allowed=True,
                 start_param=start_param
             ))
-
+            '''
             web_view = await self.tg_client.invoke(RequestWebView(
                 peer=peer,
                 bot=peer,
@@ -130,7 +132,7 @@ class Tapper:
                 from_bot_menu=False,
                 url=self.app_url
             ))
-
+            '''
             auth_url = web_view.url
 
             tg_web_data = unquote(
@@ -152,44 +154,48 @@ class Tapper:
                 f"<light-yellow>{self.session_name}</light-yellow> | Unknown error during Authorization: {error}")
             await asyncio.sleep(delay=3)
 
-
-    async def login(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> tuple[str, str]:
+    async def login(self, http_client: aiohttp.ClientSession, proxy: Proxy):
         try:
             tg_web_data = await self.get_tg_web_data(proxy=proxy)
-            # print(tg_web_data)
-            '''
-            tg_web_data_parts = tg_web_data.split('&')
-            auth_date = tg_web_data_parts[2].split('=')[1]
-            hash_value = tg_web_data_parts[3].split('=')[1]
-            '''
-            '''
             parsed_query = urllib.parse.parse_qs(tg_web_data)
             encoded_query = urllib.parse.urlencode(parsed_query, doseq=True)
-            
-            '''
+
             http_client.headers['User-Agent'] = generate_random_user_agent(device_type='android',
                                                                            browser_type='chrome')
 
-            auth_payload = {}
-
-            response = await http_client.post(url='',
-                                              json=auth_payload)
-            response.raise_for_status()
-            response_json = await response.json()
-
-            if response_json['status'] == True:
-                self.token = response_json['data']['token']
-                http_client.headers["Authorization"] = f"Bearer {self.token}"
-                headers["Authorization"] = f"Bearer {self.token}"
-                logger.success(f"{self.session_name} | Success login.")
-
-                balance = await self.get_balance(http_client=http_client)
-                logger.success(f"{self.session_name} | Current balance: {balance}")
+            self.token = encoded_query
+            http_client.headers["Telegram-Data"] = f"{self.token}"
+            headers["Telegram-Data"] = f"{self.token}"
+            logger.success(f"{self.session_name} | Success login.")
 
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error}")
             await asyncio.sleep(delay=3)
 
+    async def user_info(self, http_client: aiohttp.ClientSession):
+        try:
+            response = await http_client.get(url=f'https://snapster.psylabs.tech/api/user/getUserByTelegramId?telegramId={self.user.id}')
+            response.raise_for_status()
+            response_json = await response.json()
+
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while getting user info: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def claim_mining(self, http_client: aiohttp.ClientSession):
+        try:
+            payload = {'telegramId': f'{self.user.id}'}
+            response = await http_client.post(url='https://snapster.psylabs.tech/api/user/claimMiningBonus', json=payload)
+            response.raise_for_status()
+            response_json = await response.json()
+
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while getting user info: {error}")
+            await asyncio.sleep(delay=3)
     async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> None:
         try:
             response = await http_client.get(url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
@@ -224,11 +230,37 @@ class Tapper:
 
                 if self.token is None:
                     await self.login(http_client=http_client, proxy=proxy)
+                    user_data = await self.user_info(http_client)
+                    #print(user_data)
+                    self.info(f"Points: {user_data.get('data').get('pointsCount')}")
                 await asyncio.sleep(1.5)
 
-                '''
-                some code
-                '''
+                if settings.AUTO_CLAIM:
+                    try:
+                        if self.next_claim_dt is None:
+                            user_data = await self.user_info(http_client)
+                            last_claim = self.convert_to_local_and_unix(user_data.get('data').get('lastMiningBonusClaimDate')) + randint(settings.CLAIM_RANGE[0], settings.CLAIM_RANGE[1])
+                            self.next_claim_dt = last_claim
+                            #print(self.next_claim_dt)
+                            await asyncio.sleep(1)
+
+                        if time() > self.next_claim_dt:
+                            claim = await self.claim_mining(http_client)
+                            #print(claim)
+                            if claim.get('result'):
+                                last_claim = self.convert_to_local_and_unix(
+                                    claim.get('data').get('user').get('lastMiningBonusClaimDate')) + randint(
+                                    settings.CLAIM_RANGE[0], settings.CLAIM_RANGE[1])
+                                self.next_claim_dt = last_claim
+
+                                self.success(f"Claimed {claim.get('data').get('pointsClaimed')} points.")
+                                self.info(f"Next claim in {round((self.next_claim_dt - time()) / 60, 2)} min.")
+                        else:
+                            self.info(f"Farming in progress, next claim in {round((self.next_claim_dt - time()) / 60, 2)} min.")
+
+                    except Exception as error:
+                        logger.error(f"{self.session_name} | Unknown error while claimig: {error}")
+                        await asyncio.sleep(delay=3)
 
                 # Close connection & reset token
                 await http_client.close()
@@ -238,9 +270,9 @@ class Tapper:
 
                 self.token = None
 
-                sleep_time = 900
-                logger.info(f'<light-yellow>{self.session_name}</light-yellow> | sleep {round(sleep_time / 60, 2)} min')
-                await asyncio.sleep(sleep_time)
+                next_claim = self.next_claim_dt - time()
+                logger.info(f'<light-yellow>{self.session_name}</light-yellow> | sleep {round(next_claim / 60, 2)} min.')
+                await asyncio.sleep(next_claim)
 
             except InvalidSession as error:
                 raise error
