@@ -16,7 +16,7 @@ services:
     volumes:
       - ../sessions/Snapster:/app/sessions
 
-    restart: unless-stopped
+    restart: no
     command: "python3 main.py -a 1"
 
 networks:
