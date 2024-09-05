@@ -64,7 +64,7 @@ class Tapper:
     def success(self, message):
         from bot.utils import success
         success(f"<light-yellow>{self.session_name}</light-yellow> | {message}")
-    
+
     def convert_to_local_and_unix(self, iso_time):
         dt = datetime.fromisoformat(iso_time.replace('Z', '+00:00'))
         local_dt = dt.astimezone(get_localzone())
@@ -109,13 +109,13 @@ class Tapper:
                     await asyncio.sleep(fls + 3)
 
             if settings.REF_ID == '':
-                start_param = '' #ref
-                self.start_param = '' #ref
+                start_param = ''  # ref
+                self.start_param = ''  # ref
             else:
                 start_param = settings.REF_ID
                 self.start_param = start_param
 
-            InputBotApp = types.InputBotAppShortName(bot_id=peer, short_name="app") #change app name
+            InputBotApp = types.InputBotAppShortName(bot_id=peer, short_name="app")  # change app name
 
             web_view = await self.tg_client.invoke(RequestAppWebView(
                 peer=peer,
@@ -124,15 +124,7 @@ class Tapper:
                 write_allowed=True,
                 start_param=start_param
             ))
-            '''
-            web_view = await self.tg_client.invoke(RequestWebView(
-                peer=peer,
-                bot=peer,
-                platform='android',
-                from_bot_menu=False,
-                url=self.app_url
-            ))
-            '''
+
             auth_url = web_view.url
 
             tg_web_data = unquote(
@@ -174,7 +166,8 @@ class Tapper:
 
     async def user_info(self, http_client: aiohttp.ClientSession):
         try:
-            response = await http_client.get(url=f'https://prod.snapster.bot/api/user/getUserByTelegramId?telegramId={self.user.id}')
+            response = await http_client.get(
+                url=f'https://prod.snapster.bot/api/user/getUserByTelegramId?telegramId={self.user.id}')
             response.raise_for_status()
             response_json = await response.json()
 
@@ -196,6 +189,87 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while getting user info: {error}")
             await asyncio.sleep(delay=3)
+
+    async def get_quests(self, http_client: aiohttp.ClientSession):
+        try:
+            response = await http_client.get(
+                url=f'https://prod.snapster.bot/api/quest/getQuests?telegramId={self.user.id}')
+            response.raise_for_status()
+            response_json = await response.json()
+
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while getting quests: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def start_quest(self, http_client: aiohttp.ClientSession, quest_id: int):
+        try:
+            payload = {'telegramId': f'{self.user.id}', 'questId': quest_id}
+            response = await http_client.post(url='https://prod.snapster.bot/api/quest/startQuest', json=payload)
+            response.raise_for_status()
+            response_json = await response.json()
+
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while starting quest: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def claim_quest(self, http_client: aiohttp.ClientSession, quest_id: int):
+        try:
+            payload = {'telegramId': f'{self.user.id}', 'questId': quest_id}
+            response = await http_client.post(url='https://prod.snapster.bot/api/quest/claimQuestBonus', json=payload)
+            response.raise_for_status()
+            response_json = await response.json()
+
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while claiming quest: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def get_referral_points(self, http_client: aiohttp.ClientSession):
+        try:
+            response = await http_client.get(
+                url=f'https://prod.snapster.bot/api/referral/calculateReferralPoints?telegramId={self.user.id}')
+            response.raise_for_status()
+            response_json = await response.json()
+
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while getting referral points: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def claim_referrals(self, http_client: aiohttp.ClientSession):
+        try:
+            payload = {'telegramId': f'{self.user.id}'}
+            response = await http_client.post(url='https://prod.snapster.bot/api/referral/claimReferralPoints',
+                                              json=payload)
+            response.raise_for_status()
+            response_json = await response.json()
+
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while claiming referrals: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def start_daily(self, http_client: aiohttp.ClientSession):
+        try:
+            payload = {'telegramId': f'{self.user.id}'}
+            response = await http_client.post(url='https://prod.snapster.bot/api/dailyQuest/startDailyBonusQuest',
+                                              json=payload)
+            response.raise_for_status()
+            response_json = await response.json()
+
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error while starting daily bonus: {error}")
+            await asyncio.sleep(delay=3)
+
     async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> None:
         try:
             response = await http_client.get(url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
@@ -231,22 +305,33 @@ class Tapper:
                 if self.token is None:
                     await self.login(http_client=http_client, proxy=proxy)
                     user_data = await self.user_info(http_client)
-                    #print(user_data)
                     self.info(f"Points: {user_data.get('data').get('pointsCount')}")
                 await asyncio.sleep(1.5)
 
-                if settings.AUTO_CLAIM:
+                if settings.DAILY_BONUS:
+                    try:
+                        start_daily = await self.start_daily(http_client)
+                        if start_daily.get('result') is True:
+                            self.success(f"Daily bonus claimed!")
+
+                    except Exception as error:
+                        logger.error(f"{self.session_name} | Unknown error while daily bonus: {error}")
+                        await asyncio.sleep(delay=3)
+
+                if settings.AUTO_FARM:
                     try:
                         if self.next_claim_dt is None:
                             user_data = await self.user_info(http_client)
-                            last_claim = self.convert_to_local_and_unix(user_data.get('data').get('lastMiningBonusClaimDate')) + randint(settings.CLAIM_RANGE[0], settings.CLAIM_RANGE[1])
+                            last_claim = self.convert_to_local_and_unix(
+                                user_data.get('data').get('lastMiningBonusClaimDate')) + randint(
+                                settings.CLAIM_RANGE[0], settings.CLAIM_RANGE[1])
                             self.next_claim_dt = last_claim
-                            #print(self.next_claim_dt)
+                            # print(self.next_claim_dt)
                             await asyncio.sleep(1)
 
                         if time() > self.next_claim_dt:
                             claim = await self.claim_mining(http_client)
-                            #print(claim)
+                            # print(claim)
                             if claim.get('result'):
                                 last_claim = self.convert_to_local_and_unix(
                                     claim.get('data').get('user').get('lastMiningBonusClaimDate')) + randint(
@@ -255,11 +340,45 @@ class Tapper:
 
                                 self.success(f"Claimed {claim.get('data').get('pointsClaimed')} points.")
                                 self.info(f"Next claim in {round((self.next_claim_dt - time()) / 60, 2)} min.")
+
                         else:
-                            self.info(f"Farming in progress, next claim in {round((self.next_claim_dt - time()) / 60, 2)} min.")
+                            self.info(
+                                f"Farming in progress, next claim in {round((self.next_claim_dt - time()) / 60, 2)} min.")
+
+                        referrals = await self.get_referral_points(http_client=http_client)
+                        ref_points = referrals.get('data').get('pointsToClaim')
+                        if ref_points > 0:
+                            claim_ref = await self.claim_referrals(http_client=http_client)
+                            claimed_points = claim_ref.get('data').get('pointsClaimed')
+                            self.success(f"Claimed {claimed_points} referral points.")
 
                     except Exception as error:
-                        logger.error(f"{self.session_name} | Unknown error while claimig: {error}")
+                        logger.error(f"{self.session_name} | Unknown error while claiming: {error}")
+                        await asyncio.sleep(delay=3)
+
+                if settings.AUTO_TASKS:
+                    try:
+                        quests = await self.get_quests(http_client=http_client)
+
+                        if quests:
+                            for quest in quests.get('data'):
+                                if quest.get('type') != 'REFERRAL':
+                                    if quest.get('status') == 'EARN':
+                                        start = await self.start_quest(http_client=http_client,
+                                                                       quest_id=quest.get('id'))
+                                        if start.get('result') is True:
+                                            self.info(f"Task {quest.get('title')} started.")
+                                            await asyncio.sleep(delay=3)
+
+                                    elif quest.get('status') == 'UNCLAIMED':
+                                        claim = await self.claim_quest(http_client=http_client,
+                                                                       quest_id=quest.get('id'))
+                                        if claim.get('result') is True:
+                                            self.success(f"Task {quest.get('title')} claimed.")
+                                            await asyncio.sleep(delay=3)
+
+                    except Exception as error:
+                        logger.error(f"{self.session_name} | Unknown error while auto tasks: {error}")
                         await asyncio.sleep(delay=3)
 
                 # Close connection & reset token
@@ -271,7 +390,8 @@ class Tapper:
                 self.token = None
 
                 next_claim = self.next_claim_dt - time()
-                logger.info(f'<light-yellow>{self.session_name}</light-yellow> | sleep {round(next_claim / 60, 2)} min.')
+                logger.info(
+                    f'<light-yellow>{self.session_name}</light-yellow> | sleep {round(next_claim / 60, 2)} min.')
                 await asyncio.sleep(next_claim)
 
             except InvalidSession as error:

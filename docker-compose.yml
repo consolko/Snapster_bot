@@ -18,6 +18,8 @@ services:
 
     restart: no
     command: "python3 main.py -a 1"
+    env_file:
+      - .env
 
 networks:
   tg_bots_network:

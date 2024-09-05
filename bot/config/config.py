@@ -9,8 +9,12 @@ class Settings(BaseSettings):
 
     REF_ID: str = ''
 
-    AUTO_CLAIM: bool = True
+    AUTO_FARM: bool = True
     CLAIM_RANGE: list[int] = [10800, 14400]
+
+    AUTO_TASKS: bool = True
+
+    DAILY_BONUS: bool = True
 
     USE_RANDOM_DELAY_IN_RUN: bool = True
     RANDOM_DELAY_IN_RUN: list[int] = [0, 15]
