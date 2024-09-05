@@ -34,7 +34,7 @@ class Tapper:
         self.session_name = tg_client.name
         self.tg_client = tg_client
         self.bot_name = 'snapster_bot'
-        self.app_url = 'https://snapster.psylabs.tech/'
+        self.app_url = 'https://prod.snapster.bot/'
 
         self.user = None
         self.token = None
@@ -174,7 +174,7 @@ class Tapper:
 
     async def user_info(self, http_client: aiohttp.ClientSession):
         try:
-            response = await http_client.get(url=f'https://snapster.psylabs.tech/api/user/getUserByTelegramId?telegramId={self.user.id}')
+            response = await http_client.get(url=f'https://prod.snapster.bot/api/user/getUserByTelegramId?telegramId={self.user.id}')
             response.raise_for_status()
             response_json = await response.json()
 
@@ -187,7 +187,7 @@ class Tapper:
     async def claim_mining(self, http_client: aiohttp.ClientSession):
         try:
             payload = {'telegramId': f'{self.user.id}'}
-            response = await http_client.post(url='https://snapster.psylabs.tech/api/user/claimMiningBonus', json=payload)
+            response = await http_client.post(url='https://prod.snapster.bot/api/user/claimMiningBonus', json=payload)
             response.raise_for_status()
             response_json = await response.json()
 
