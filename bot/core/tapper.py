@@ -305,7 +305,10 @@ class Tapper:
                 if self.token is None:
                     await self.login(http_client=http_client, proxy=proxy)
                     user_data = await self.user_info(http_client)
-                    self.info(f"Points: {user_data.get('data').get('pointsCount')}")
+                    user_points = user_data.get('data').get('pointsCount')
+                    user_wallet = user_data.get('data').get('walletAddress')
+                    wallet_signed = user_data.get('data').get('isWalletSigned')
+                    self.info(f"Points: {user_points} Wallet: {user_wallet} Signed: {wallet_signed}")
                 await asyncio.sleep(1.5)
 
                 if settings.DAILY_BONUS:
